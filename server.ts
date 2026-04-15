@@ -993,6 +993,7 @@ async function main(): Promise<void> {
   try {
     const auth = await web.auth.test()
     botUserId = (auth.user_id as string) || ''
+    console.error('[slack] bot user id:', botUserId)
   } catch (err) {
     console.error('[slack] Failed to resolve bot user ID:', err)
   }

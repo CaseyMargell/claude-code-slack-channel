@@ -381,8 +381,11 @@ export interface GateOptions {
 export async function gate(event: unknown, opts: GateOptions): Promise<GateResult> {
   const ev = event as Record<string, unknown>
 
-  // 1. Drop bot messages immediately
-  if (ev['bot_id']) return { action: 'drop' }
+  // 1. Drop our own echoed messages. Other bots are allowed through so they
+  // can be filtered (or permitted) by the same per-channel access rules that
+  // apply to human users — this enables multi-agent coordination in shared
+  // channels. Self-echo is still dropped to prevent reply loops.
+  if (ev['bot_id'] && ev['user'] === opts.botUserId) return { action: 'drop' }
 
   // 2. Drop non-message subtypes (message_changed, message_deleted, etc.)
   if (ev['subtype'] && ev['subtype'] !== 'file_share') return { action: 'drop' }

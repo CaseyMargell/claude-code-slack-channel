@@ -50,12 +50,60 @@ function makeOpts(overrides: Partial<GateOptions> = {}): GateOptions {
 // ---------------------------------------------------------------------------
 
 describe('gate', () => {
-  test('drops messages with bot_id', async () => {
+  test('drops self-echo (bot_id with user matching our botUserId)', async () => {
+    const access = makeAccess({
+      channels: { C1: { requireMention: false, allowFrom: [] } },
+    })
     const result = await gate(
-      { bot_id: 'B123', user: 'U123', channel_type: 'im', channel: 'D1' },
-      makeOpts(),
+      { bot_id: 'B_SELF', user: 'U_BOT', channel_type: 'channel', channel: 'C1', text: 'hi' },
+      makeOpts({ access }),
     )
     expect(result.action).toBe('drop')
+  })
+
+  test('allows other bots through in opted-in channels (cross-bot coordination)', async () => {
+    const access = makeAccess({
+      channels: { C1: { requireMention: false, allowFrom: [] } },
+    })
+    const result = await gate(
+      { bot_id: 'B_OTHER', user: 'U_OTHER_BOT', channel_type: 'channel', channel: 'C1', text: 'hello from other bot' },
+      makeOpts({ access }),
+    )
+    expect(result.action).toBe('deliver')
+  })
+
+  test('cross-bot messages still respect requireMention', async () => {
+    const access = makeAccess({
+      channels: { C1: { requireMention: true, allowFrom: [] } },
+    })
+    const noMention = await gate(
+      { bot_id: 'B_OTHER', user: 'U_OTHER_BOT', channel_type: 'channel', channel: 'C1', text: 'no mention here' },
+      makeOpts({ access }),
+    )
+    expect(noMention.action).toBe('drop')
+
+    const withMention = await gate(
+      { bot_id: 'B_OTHER', user: 'U_OTHER_BOT', channel_type: 'channel', channel: 'C1', text: 'hey <@U_BOT> please look' },
+      makeOpts({ access }),
+    )
+    expect(withMention.action).toBe('deliver')
+  })
+
+  test('cross-bot messages still respect channel allowFrom', async () => {
+    const access = makeAccess({
+      channels: { C1: { requireMention: false, allowFrom: ['U_TRUSTED_BOT'] } },
+    })
+    const untrusted = await gate(
+      { bot_id: 'B_OTHER', user: 'U_OTHER_BOT', channel_type: 'channel', channel: 'C1', text: 'hi' },
+      makeOpts({ access }),
+    )
+    expect(untrusted.action).toBe('drop')
+
+    const trusted = await gate(
+      { bot_id: 'B_TRUSTED', user: 'U_TRUSTED_BOT', channel_type: 'channel', channel: 'C1', text: 'hi' },
+      makeOpts({ access }),
+    )
+    expect(trusted.action).toBe('deliver')
   })
 
   test('drops message_changed subtype', async () => {
